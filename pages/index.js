@@ -106,16 +106,212 @@ const Badge = ({ rating, small }) => (
   </span>
 );
 
-const DishRow = ({ dish, onDelete }) => {
+// ── Dish detail modal (foto grande + acciones) ─────────────
+const DishDetailModal = ({ dish, onClose, onEdit, onDelete }) => {
   const [confirm, setConfirm] = useState(false);
+  if (!dish) return null;
   return (
-    <div style={{
-      display: 'flex', alignItems: 'flex-start', gap: 12, padding: '13px 0',
-      borderBottom: '1px solid #1e1e1e',
+    <div className="overlay" onClick={onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 300,
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end',
     }}>
-      {dish.photo_url && (
+      <div className="sheet" onClick={e => e.stopPropagation()} style={{
+        background: '#0e0e0e', borderRadius: '24px 24px 0 0', width: '100%',
+        maxWidth: 480, border: '1px solid #2a2a2a', borderBottom: 'none', overflow: 'hidden',
+      }}>
+        {/* Foto grande */}
+        {dish.photo_url ? (
+          <div style={{ width: '100%', height: 280, position: 'relative' }}>
+            <img src={dish.photo_url} alt={dish.name}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+            <div style={{
+              position: 'absolute', inset: 0,
+              background: 'linear-gradient(transparent 50%, rgba(0,0,0,0.85))',
+            }} />
+            <button onClick={onClose} style={{
+              position: 'absolute', top: 14, right: 14, width: 34, height: 34,
+              borderRadius: '50%', background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.2)',
+              color: '#fff', fontSize: 18, cursor: 'pointer', display: 'flex',
+              alignItems: 'center', justifyContent: 'center', lineHeight: 1,
+            }}>×</button>
+          </div>
+        ) : (
+          <div style={{
+            width: '100%', height: 140, background: '#1a1a1a',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 60,
+          }}>🍽️</div>
+        )}
+
+        {/* Info */}
+        <div style={{ padding: '20px 22px 36px' }}>
+          <div style={{ fontSize: 22, fontFamily: "'DM Serif Display',serif", color: '#f0f0f0', marginBottom: 10 }}>
+            {dish.name}
+          </div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 10 }}>
+            <Badge rating={dish.rating} />
+            <span style={{ fontSize: 12, color: '#555', fontFamily: "'DM Mono',monospace" }}>
+              {RATING_LABELS[dish.rating]}
+            </span>
+          </div>
+          {dish.notes && (
+            <div style={{ fontSize: 14, color: '#888', fontStyle: 'italic', marginBottom: 10,
+              padding: '10px 14px', background: '#1a1a1a', borderRadius: 10 }}>
+              💬 {dish.notes}
+            </div>
+          )}
+          <div style={{ fontSize: 11, color: '#444', fontFamily: "'DM Mono',monospace", marginBottom: 20 }}>
+            {dish.added_by} · {new Date(dish.created_at).toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'2-digit' })}
+          </div>
+
+          {/* Botones */}
+          <div style={{ display: 'flex', gap: 10 }}>
+            {!confirm ? (
+              <>
+                <button onClick={() => setConfirm(true)} style={{
+                  flex: 1, padding: 13, borderRadius: 12, border: '1px solid #8B1A1A',
+                  background: 'transparent', color: '#8B1A1A', fontSize: 14, cursor: 'pointer',
+                }}>Borrar</button>
+                <button onClick={() => { onClose(); onEdit(dish); }} style={{
+                  flex: 1, padding: 13, borderRadius: 12, border: '1px solid #444',
+                  background: '#1a1a1a', color: '#f0f0f0', fontSize: 14, cursor: 'pointer',
+                }}>✏️ Editar</button>
+              </>
+            ) : (
+              <>
+                <button onClick={() => setConfirm(false)} style={{
+                  flex: 1, padding: 13, borderRadius: 12, border: '1px solid #333',
+                  background: 'transparent', color: '#888', fontSize: 14, cursor: 'pointer',
+                }}>Cancelar</button>
+                <button onClick={() => { onDelete(dish.id); onClose(); }} style={{
+                  flex: 1, padding: 13, borderRadius: 12, border: 'none',
+                  background: '#8B1A1A', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                }}>Confirmar borrar</button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Edit dish sheet ────────────────────────────────────────
+const EditDishSheet = ({ dish, onSave, onClose }) => {
+  const [dishName, setDishName] = useState(dish.name);
+  const [rating, setRating]     = useState(dish.rating);
+  const [notes, setNotes]       = useState(dish.notes || '');
+  const [photoFile, setPhotoFile]     = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(dish.photo_url || null);
+  const [saving, setSaving]     = useState(false);
+  const fileRef = useRef();
+
+  const handlePhoto = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setPhotoFile(file);
+    const reader = new FileReader();
+    reader.onload = ev => setPhotoPreview(ev.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  const handleSave = async () => {
+    if (!dishName.trim() || saving) return;
+    setSaving(true);
+    try {
+      let photo_url = dish.photo_url;
+      if (photoFile) photo_url = await uploadPhoto(photoFile);
+
+      const { error } = await (await import('../lib/supabase')).supabase
+        .from('dishes')
+        .update({ name: dishName.trim(), rating, notes: notes.trim(), photo_url })
+        .eq('id', dish.id);
+      if (error) throw error;
+      onSave();
+    } catch (err) {
+      console.error(err);
+      alert('Error guardando. Intenta de nuevo.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inp = {
+    width: '100%', background: '#1a1a1a', border: '1px solid #2a2a2a',
+    borderRadius: 10, padding: '12px 14px', color: '#f0f0f0', fontSize: 15, outline: 'none',
+  };
+
+  return (
+    <div className="overlay" style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', zIndex: 400,
+      display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+    }}>
+      <div className="sheet" style={{
+        background: '#0e0e0e', borderRadius: '24px 24px 0 0', width: '100%',
+        maxWidth: 480, maxHeight: '90vh', overflowY: 'auto',
+        border: '1px solid #2a2a2a', borderBottom: 'none',
+      }}>
+        <div style={{ padding: '14px 0 0', display: 'flex', justifyContent: 'center' }}>
+          <div style={{ width: 40, height: 4, background: '#333', borderRadius: 2 }} />
+        </div>
+        <div style={{ padding: '18px 22px 42px' }}>
+          <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 22, marginBottom: 20 }}>
+            Editar platillo ✏️
+          </div>
+
+          {/* Foto */}
+          <div onClick={() => fileRef.current.click()} style={{
+            width: '100%', height: 160, borderRadius: 14, marginBottom: 14, cursor: 'pointer',
+            background: photoPreview ? `url(${photoPreview}) center/cover` : '#1a1a1a',
+            border: '2px dashed #333', display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center', gap: 6,
+          }}>
+            {!photoPreview && <><span style={{ fontSize: 32 }}>📸</span><span style={{ fontSize: 12, color: '#666' }}>Cambiar foto</span></>}
+            <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handlePhoto} />
+          </div>
+
+          <input style={{ ...inp, marginBottom: 12 }} value={dishName}
+            onChange={e => setDishName(e.target.value)} placeholder="Nombre del platillo" />
+
+          <div style={{ background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: 10,
+            padding: '14px 16px', marginBottom: 12 }}>
+            <RatingBar value={rating} onChange={setRating} />
+          </div>
+
+          <textarea style={{ ...inp, height: 72 }} value={notes}
+            onChange={e => setNotes(e.target.value)}
+            placeholder="Notas: sin picante, solo fines de semana…" />
+
+          <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+            <button onClick={onClose} style={{
+              flex: 1, padding: 14, borderRadius: 12, border: '1px solid #333',
+              background: 'transparent', color: '#888', fontSize: 14, cursor: 'pointer',
+            }}>Cancelar</button>
+            <button onClick={handleSave} disabled={!dishName.trim() || saving} style={{
+              flex: 2, padding: 14, borderRadius: 12, border: 'none', fontSize: 14, fontWeight: 700,
+              background: dishName.trim() && !saving ? '#FF6B35' : '#2a2a2a',
+              color: dishName.trim() && !saving ? '#fff' : '#555', cursor: 'pointer',
+            }}>{saving ? 'Guardando…' : 'Guardar cambios'}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const DishRow = ({ dish, onSelect }) => {
+  return (
+    <div onClick={() => onSelect(dish)} style={{
+      display: 'flex', alignItems: 'center', gap: 12, padding: '13px 0',
+      borderBottom: '1px solid #1e1e1e', cursor: 'pointer',
+    }}>
+      {dish.photo_url ? (
         <img src={dish.photo_url} alt={dish.name}
           style={{ width: 52, height: 52, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} />
+      ) : (
+        <div style={{ width: 52, height: 52, borderRadius: 10, background: '#1a1a1a',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
+          🍽️
+        </div>
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 15, fontFamily: "'DM Serif Display',serif", color: '#f0f0f0', marginBottom: 3 }}>
@@ -128,32 +324,13 @@ const DishRow = ({ dish, onDelete }) => {
           </span>
         </div>
         {dish.notes && (
-          <div style={{ fontSize: 12, color: '#666', fontStyle: 'italic', marginTop: 4 }}>
+          <div style={{ fontSize: 12, color: '#666', fontStyle: 'italic', marginTop: 4,
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             💬 {dish.notes}
           </div>
         )}
       </div>
-      <div>
-        {!confirm ? (
-          <button onClick={() => setConfirm(true)}
-            style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', fontSize: 16, padding: 4 }}>
-            ×
-          </button>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <button onClick={() => { onDelete(dish.id); setConfirm(false); }}
-              style={{ background: '#8B1A1A', border: 'none', color: '#fff', borderRadius: 6,
-                fontSize: 11, padding: '3px 8px', cursor: 'pointer', fontFamily: "'DM Mono',monospace" }}>
-              borrar
-            </button>
-            <button onClick={() => setConfirm(false)}
-              style={{ background: 'none', border: '1px solid #333', color: '#888', borderRadius: 6,
-                fontSize: 11, padding: '3px 8px', cursor: 'pointer' }}>
-              no
-            </button>
-          </div>
-        )}
-      </div>
+      <span style={{ fontSize: 16, color: '#333', flexShrink: 0 }}>›</span>
     </div>
   );
 };
@@ -212,7 +389,9 @@ const RestaurantCard = ({ restaurant, onClick }) => {
 };
 
 // ── Restaurant detail sheet ────────────────────────────────
-const RestaurantSheet = ({ restaurant, onClose, onAddDish, onDeleteDish }) => {
+const RestaurantSheet = ({ restaurant, onClose, onAddDish, onDeleteDish, onRefresh }) => {
+  const [selectedDish, setSelectedDish] = useState(null);
+  const [editingDish, setEditingDish]   = useState(null);
   const sorted = [...(restaurant.dishes || [])].sort((a,b) => b.rating - a.rating);
   return (
     <div className="overlay" style={{
@@ -265,7 +444,7 @@ const RestaurantSheet = ({ restaurant, onClose, onAddDish, onDeleteDish }) => {
                 Platillos · mejor calificados primero
               </div>
               {sorted.map(d => (
-                <DishRow key={d.id} dish={d} onDelete={onDeleteDish} />
+                <DishRow key={d.id} dish={d} onSelect={setSelectedDish} />
               ))}
               <div style={{ height: 16 }} />
             </>
@@ -284,6 +463,22 @@ const RestaurantSheet = ({ restaurant, onClose, onAddDish, onDeleteDish }) => {
           }}>+ Agregar platillo</button>
         </div>
       </div>
+
+      {selectedDish && (
+        <DishDetailModal
+          dish={selectedDish}
+          onClose={() => setSelectedDish(null)}
+          onEdit={(d) => setEditingDish(d)}
+          onDelete={(id) => { onDeleteDish(id); setSelectedDish(null); }}
+        />
+      )}
+      {editingDish && (
+        <EditDishSheet
+          dish={editingDish}
+          onClose={() => setEditingDish(null)}
+          onSave={() => { setEditingDish(null); setSelectedDish(null); onRefresh(); }}
+        />
+      )}
     </div>
   );
 };
@@ -672,6 +867,7 @@ export default function FoodLog() {
           onClose={() => setActiveResto(null)}
           onAddDish={openAddForResto}
           onDeleteDish={handleDeleteDish}
+          onRefresh={load}
         />
       )}
 
