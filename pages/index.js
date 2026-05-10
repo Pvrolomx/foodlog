@@ -808,7 +808,7 @@ function PinScreen({ onUnlock }) {
 
 export default function FoodLog() {
   const [user, setUser]               = useState(null);
-  const [checking, setChecking]       = useState(true);
+  const [checking, setChecking]       = useState(false);
   const [restaurants, setRestaurants] = useState([]);
   const [loading, setLoading]         = useState(true);
   const [activeResto, setActiveResto] = useState(null);
@@ -816,14 +816,15 @@ export default function FoodLog() {
   const [addForResto, setAddForResto] = useState(null);
   const [search, setSearch]           = useState('');
 
-  // Check localStorage on mount
+  // Check localStorage on mount — solo en cliente
   useEffect(() => {
     const saved = localStorage.getItem('foodlog_user');
-    if (saved && PINS[saved === 'Rolo' ? '2222' : '1111']) setUser(saved);
-    setChecking(false);
+    if (saved && Object.values(PINS).includes(saved)) setUser(saved);
+    setChecking(true); // marca que ya corrió en cliente
   }, []);
 
-  if (checking) return null;
+  // Antes de que corra el efecto: no renderizar nada (evita hydration mismatch)
+  if (!checking) return null;
   if (!user) return <PinScreen onUnlock={setUser} />;
 
   const load = useCallback(async () => {
