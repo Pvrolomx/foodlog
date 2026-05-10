@@ -713,13 +713,118 @@ const AddForm = ({ prefillResto, restaurants, onSave, onClose }) => {
 };
 
 // ── Main page ──────────────────────────────────────────────
+const PINS = { '2222': 'Rolo', '1111': 'Claudia' };
+
+function PinScreen({ onUnlock }) {
+  const [pin, setPin]       = useState('');
+  const [error, setError]   = useState(false);
+  const [shake, setShake]   = useState(false);
+
+  const handleDigit = (d) => {
+    if (pin.length >= 4) return;
+    const next = pin + d;
+    setPin(next);
+    setError(false);
+    if (next.length === 4) {
+      setTimeout(() => {
+        if (PINS[next]) {
+          localStorage.setItem('foodlog_user', PINS[next]);
+          onUnlock(PINS[next]);
+        } else {
+          setShake(true);
+          setError(true);
+          setTimeout(() => { setPin(''); setShake(false); }, 600);
+        }
+      }, 120);
+    }
+  };
+
+  const handleDel = () => { setPin(p => p.slice(0,-1)); setError(false); };
+
+  const digits = ['1','2','3','4','5','6','7','8','9','','0','⌫'];
+
+  return (
+    <div style={{
+      minHeight: '100vh', background: '#0a0a0a', display: 'flex',
+      flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      fontFamily: "'DM Sans',sans-serif", padding: 24,
+    }}>
+      <div style={{ fontSize: 48, marginBottom: 16 }}>🍽️</div>
+      <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 28, color: '#f0f0f0', marginBottom: 6 }}>
+        FoodLog
+      </div>
+      <div style={{ fontSize: 13, color: '#555', marginBottom: 48, fontFamily: "'DM Mono',monospace" }}>
+        Rolo & Claudia
+      </div>
+
+      {/* Dots */}
+      <div style={{
+        display: 'flex', gap: 16, marginBottom: 48,
+        animation: shake ? 'shake 0.5s ease' : 'none',
+      }}>
+        {[0,1,2,3].map(i => (
+          <div key={i} style={{
+            width: 14, height: 14, borderRadius: '50%', transition: 'background 0.15s',
+            background: i < pin.length ? (error ? '#8B1A1A' : '#FF6B35') : '#2a2a2a',
+            border: '2px solid ' + (i < pin.length ? (error ? '#8B1A1A' : '#FF6B35') : '#333'),
+          }} />
+        ))}
+      </div>
+
+      {/* Keypad */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, width: 240 }}>
+        {digits.map((d, i) => (
+          <button key={i} onClick={() => d === '⌫' ? handleDel() : d !== '' ? handleDigit(d) : null}
+            disabled={d === ''}
+            style={{
+              height: 68, borderRadius: 16, border: 'none', fontSize: d === '⌫' ? 20 : 24,
+              fontFamily: "'DM Mono',monospace", fontWeight: 600,
+              background: d === '' ? 'transparent' : '#141414',
+              color: d === '⌫' ? '#666' : '#f0f0f0',
+              cursor: d === '' ? 'default' : 'pointer',
+              transition: 'background 0.1s',
+              boxShadow: d !== '' ? '0 2px 8px rgba(0,0,0,0.3)' : 'none',
+            }}
+            onMouseDown={e => { if (d !== '') e.currentTarget.style.background = '#2a2a2a'; }}
+            onMouseUp={e => { if (d !== '') e.currentTarget.style.background = '#141414'; }}
+          >
+            {d}
+          </button>
+        ))}
+      </div>
+
+      <style>{`
+        @keyframes shake {
+          0%,100%{transform:translateX(0)}
+          20%{transform:translateX(-8px)}
+          40%{transform:translateX(8px)}
+          60%{transform:translateX(-6px)}
+          80%{transform:translateX(6px)}
+        }
+      `}</style>
+    </div>
+  );
+}
+
 export default function FoodLog() {
+  const [user, setUser]               = useState(null);
+  const [checking, setChecking]       = useState(true);
   const [restaurants, setRestaurants] = useState([]);
   const [loading, setLoading]         = useState(true);
   const [activeResto, setActiveResto] = useState(null);
   const [showAdd, setShowAdd]         = useState(false);
   const [addForResto, setAddForResto] = useState(null);
   const [search, setSearch]           = useState('');
+
+  // Check localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('foodlog_user');
+    if (saved && PINS[saved === 'Rolo' ? '2222' : '1111']) setUser(saved);
+    setChecking(false);
+  }, []);
+
+  if (checking) return null;
+  if (!user) return <PinScreen onUnlock={setUser} />;
 
   const load = useCallback(async () => {
     try {
@@ -782,7 +887,7 @@ export default function FoodLog() {
           <div>
             <div style={{ fontSize: 10, color: '#FF6B35', fontFamily: "'DM Mono',monospace",
               letterSpacing: 2, marginBottom: 8, textTransform: 'uppercase' }}>
-              Rolo & Claudia
+              {user} · FoodLog
             </div>
             <div style={{ fontSize: 34, fontFamily: "'DM Serif Display',serif", lineHeight: 1.05, marginBottom: 6 }}>
               FoodLog
@@ -792,12 +897,18 @@ export default function FoodLog() {
               {totalDishes > 0 && ` · ⭐ ${globalAvg}`}
             </div>
           </div>
-          <button onClick={() => { setAddForResto(null); setShowAdd(true); }} style={{
-            width: 52, height: 52, borderRadius: 16, border: 'none',
-            background: '#FF6B35', color: '#fff', fontSize: 28, cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 4px 24px rgba(255,107,53,0.45)', flexShrink: 0,
-          }}>+</button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
+            <button onClick={() => { setAddForResto(null); setShowAdd(true); }} style={{
+              width: 52, height: 52, borderRadius: 16, border: 'none',
+              background: '#FF6B35', color: '#fff', fontSize: 28, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 4px 24px rgba(255,107,53,0.45)', flexShrink: 0,
+            }}>+</button>
+            <button onClick={() => { localStorage.removeItem('foodlog_user'); setUser(null); }} style={{
+              background: 'none', border: 'none', color: '#333', fontSize: 11,
+              fontFamily: "'DM Mono',monospace", cursor: 'pointer', letterSpacing: 1,
+            }}>salir</button>
+          </div>
         </div>
       </div>
 
