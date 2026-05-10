@@ -477,7 +477,7 @@ const AddForm = ({ prefillResto, restaurants, onSave, onClose }) => {
                 </span>
               </div>
             )}
-            <input ref={fileRef} type="file" accept="image/*" capture="environment"
+            <input ref={fileRef} type="file" accept="image/*"
               style={{ display: 'none' }} onChange={handlePhoto} />
           </div>
 
