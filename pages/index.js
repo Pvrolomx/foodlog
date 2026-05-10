@@ -198,7 +198,7 @@ const DishDetailModal = ({ dish, onClose, onEdit, onDelete }) => {
 // ── Edit dish sheet ────────────────────────────────────────
 const EditDishSheet = ({ dish, onSave, onClose }) => {
   const [dishName, setDishName] = useState(dish.name);
-  const [rating, setRating]     = useState(dish.rating);
+  const [rating, setRating]     = useState(Number(dish.rating));
   const [notes, setNotes]       = useState(dish.notes || '');
   const [photoFile, setPhotoFile]     = useState(null);
   const [photoPreview, setPhotoPreview] = useState(dish.photo_url || null);
@@ -223,7 +223,7 @@ const EditDishSheet = ({ dish, onSave, onClose }) => {
 
       const { error } = await supabase
         .from('dishes')
-        .update({ name: dishName.trim(), rating, notes: notes.trim(), photo_url })
+        .update({ name: dishName.trim(), rating: Number(rating), notes: notes.trim(), photo_url })
         .eq('id', dish.id);
       if (error) throw error;
       onSave();
@@ -754,7 +754,7 @@ function PinScreen({ onUnlock }) {
         FoodLog
       </div>
       <div style={{ fontSize: 13, color: '#555', marginBottom: 48, fontFamily: "'DM Mono',monospace" }}>
-        Rolo & Claudia
+        Rolo: 2222 &nbsp;·&nbsp; Claudia: 1111
       </div>
 
       {/* Dots */}
@@ -908,9 +908,10 @@ export default function FoodLog() {
               boxShadow: '0 4px 24px rgba(255,107,53,0.45)', flexShrink: 0,
             }}>+</button>
             <button onClick={() => { localStorage.removeItem('foodlog_user'); setUser(null); }} style={{
-              background: 'none', border: 'none', color: '#333', fontSize: 11,
+              background: '#1a1a1a', border: '1px solid #333', borderRadius: 8,
+              color: '#666', fontSize: 11, padding: '5px 12px',
               fontFamily: "'DM Mono',monospace", cursor: 'pointer', letterSpacing: 1,
-            }}>salir</button>
+            }}>⇄ cambiar usuario</button>
           </div>
         </div>
       </div>
