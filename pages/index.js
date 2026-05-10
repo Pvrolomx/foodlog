@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  getRestaurants, addRestaurant, addDish, deleteDish, uploadPhoto,
+  getRestaurants, addRestaurant, addDish, deleteDish, uploadPhoto, supabase,
 } from '../lib/supabase';
 
 // ── Constants ──────────────────────────────────────────────
@@ -221,7 +221,7 @@ const EditDishSheet = ({ dish, onSave, onClose }) => {
       let photo_url = dish.photo_url;
       if (photoFile) photo_url = await uploadPhoto(photoFile);
 
-      const { error } = await (await import('../lib/supabase')).supabase
+      const { error } = await supabase
         .from('dishes')
         .update({ name: dishName.trim(), rating, notes: notes.trim(), photo_url })
         .eq('id', dish.id);
@@ -816,16 +816,14 @@ export default function FoodLog() {
   const [addForResto, setAddForResto] = useState(null);
   const [search, setSearch]           = useState('');
 
-  // Check localStorage on mount — solo en cliente
+  // Check localStorage — solo corre en cliente (useEffect nunca corre en SSR)
   useEffect(() => {
     const saved = localStorage.getItem('foodlog_user');
-    if (saved && Object.values(PINS).includes(saved)) setUser(saved);
-    setChecking(true); // marca que ya corrió en cliente
+    if (saved && Object.values(PINS).includes(saved)) {
+      setUser(saved);
+    }
+    setChecking(true);
   }, []);
-
-  // Antes de que corra el efecto: no renderizar nada (evita hydration mismatch)
-  if (!checking) return null;
-  if (!user) return <PinScreen onUnlock={setUser} />;
 
   const load = useCallback(async () => {
     try {
@@ -876,6 +874,10 @@ export default function FoodLog() {
     setAddForResto(resto);
     setShowAdd(true);
   };
+
+  // Guards — después de todos los hooks
+  if (!checking) return null;
+  if (!user) return <PinScreen onUnlock={(u) => { setUser(u); }} />;
 
   return (
     <div style={{
